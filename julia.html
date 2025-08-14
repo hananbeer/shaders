@@ -1,0 +1,173 @@
+<html>
+
+<head>
+    <title>Julia Demo</title>
+    <meta name="Keywords" content="webgl, glsl, hanan beer, fractal, mandelbrot, julia set, julia">
+    <meta name="Description" content="Julia Demo">
+    <meta name="Author" content="Hanan Beer">
+
+    <script src="./piLibs.js"></script>
+    
+<script type="x-shader/x-vertex" id="vsSource">
+
+</script>
+
+<script type="x-shader/x-fragment" id="fsSource">
+
+</script>
+
+    <script src="./shader.js"></script>
+    <script>
+    let origin = { x: 0, y: 0 }
+    let grabPos = null
+    let zoomLevel = -0.8
+    let zoomLevelJC = 0
+    let sc = null;
+    
+    function zoom() { return Math.exp(zoomLevel) }
+    function width() { return canvasShader.width }
+    function height() { return canvasShader.height }
+    
+    function translate(x, y) {
+      return [x + origin.x, y + origin.y]
+    }
+    
+    function scale(x, y) {
+      return [x / zoom(), y / zoom()]
+    }
+
+    function transform(x, y) {
+      let [tx, ty] = translate(x, y)
+      return scale(tx, ty)
+    }
+    
+    function center(x, y) {
+      return [x - width() / 2, y - height() / 2]
+    }
+    
+    function normalize(w, h) {
+      return [w / width(), h / height()]
+    }
+    
+    function scale_norm(w, h) {
+      let [nw, nh] = normalize(w, h)
+      return scale(nw, nh)
+    }
+
+    function onWheel(e) {
+      let delta = e.deltaY / 1000.0;
+      if (grabPos) {
+        console.log(e.which)
+        zoomLevelJC -= delta
+        sc.mState.iJC[2] = zoomLevelJC
+      } else {
+        zoomLevel -= delta
+        sc.mState.iOrigin[2] = zoomLevel
+      }
+      
+      displayUniforms()
+    }
+
+    function onMouseDown(e) {
+      grabPos = [e.offsetX, e.offsetY]
+      if (e.which === 3)
+        sc.mState.iSuperSet ^= 1
+        
+      onMouseMove(e)
+    }
+
+    function onMouseUp(e) {
+      if (!grabPos) return
+      let offset = scale_norm(e.offsetX - grabPos[0], e.offsetY - grabPos[1])
+      
+      if (e.which !== 3)
+        origin = { x: origin.x - offset[0], y: origin.y + offset[1] }
+
+      sc.mState.iOrigin = [origin.x, origin.y, zoomLevel]
+      grabPos = null
+    }
+
+    function displayUniforms() {
+      if (!window.elJC)
+        return
+      
+      elJC.innerText = `O: ${sc.mState.iOrigin[0].toFixed(3)}, ${sc.mState.iOrigin[1].toFixed(3)}`
+      elJC.innerText += `\r\nC: ${sc.mState.iJC[0].toFixed(3)}, ${sc.mState.iJC[1].toFixed(3)}`
+      elJC.innerText += `\r\nZoom: ${zoomLevel.toFixed(3)}`
+    }
+
+    function onMouseMove(e) {
+      if (e.which === 0) {
+        displayUniforms()
+        return
+      }
+
+      if (e.which == 3) {
+        let offset = scale_norm(e.offsetX - width() / 2, e.offsetY - height() / 2)
+        sc.mState.iJC = [origin.x + offset[0], origin.y - offset[1], zoomLevelJC]
+      } else if (grabPos) {
+        let offset = scale_norm(e.offsetX - grabPos[0], e.offsetY - grabPos[1])
+        sc.mState.iOrigin = [origin.x  - offset[0], origin.y + offset[1], zoomLevel]
+      }
+      
+      displayUniforms()
+    }
+    
+    function onFragShader(source) {
+      if (!sc.Init(source))
+      {
+          console.error( "Could not create shader!" );
+          return;
+      }
+      
+      sc.StartRendering(source)
+  
+      // defaults
+      sc.mState.iNumIters = 300
+      sc.mState.iSuperSet = 1
+      sc.mState.iThreshold = 2.0
+      sc.mState.iOrigin = [0.0, 0.0, zoomLevel]
+      sc.mState.iJC = [0.0, 0.0, zoomLevelJC]
+
+      canvasShader.addEventListener('mousewheel', onWheel)
+      canvasShader.addEventListener('mousemove', onMouseMove)
+      canvasShader.addEventListener('mousedown', onMouseDown)
+      canvasShader.addEventListener('mouseup', onMouseUp)
+      canvasShader.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); }
+      
+    }
+
+    function pageInit()
+    {
+        piDisableTouch();
+
+        let canvas = document.getElementById("canvasShader")
+        sc = new ShaderCanvas(canvas)
+        
+        //fetch('./frag.glsl')
+        fetch('https://cdn.glitch.global/2e1c9ac9-9b09-4c60-b233-0ab628ab920c/frag.glsl')
+          .then(resp => resp.text())
+          .then(source => onFragShader(source))
+    }
+    
+    function setIters(num) {
+      sc.mState.iNumIters = num
+    }
+
+    function setThreshold(threshold) {
+      sc.mState.iThreshold = Math.exp(threshold)
+    }
+    </script>
+</head>
+
+
+<body style="overflow: hidden" onload="pageInit()">
+    <canvas id="canvasShader" style="width: 800px; height: 800px;"></canvas>
+    <br />
+    <input type="range" min="1" max="100" value="300" id="elNumIters" oninput="setIters(this.value)" />
+    <input type="range" min="0" max="70" value="2" id="elThreshold" oninput="setThreshold(this.value)" />
+    <div id="fpsCounter"></div>
+    <!--<div id="elJC"></div>-->
+</body>
+
+</html>

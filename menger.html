@@ -1,0 +1,273 @@
+<html>
+
+<head>
+    <title>Menger Demo</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+
+    <meta name="Keywords" content="webgl, glsl, hanan beer, fractal, mandelbrot, menger, nft">
+    <meta name="Description" content="Menger Demo">
+    <meta name="Author" content="Hanan Beer">
+
+    <style>
+    html {
+      overflow: hidden;
+      height: 100%;
+    }
+
+    body {
+      overscroll-behavior: none;
+      height: 100%;
+      overflow: auto;
+      margin: 0px;
+      padding: 0px;
+      background-color: #000;
+      color: #fff;
+      font-family: Monospace;
+      font-size: 13px;
+      line-height: 24px;
+
+    }
+    </style>
+  
+    <script src="./piLibs.js"></script>
+    
+    <script src="./shader.js"></script>
+    <script>
+    let origin = { x: 0, y: 0 }
+    let grabPos = null
+    let zoomLevel = 0
+    let sc = null;
+    
+    function zoom() { return Math.exp(zoomLevel) }
+    function width() { return canvasShader.width }
+    function height() { return canvasShader.height }
+    
+    function translate(x, y) {
+      return [x + origin.x, y + origin.y]
+    }
+    
+    function scale(x, y) {
+      return [x / zoom(), y / zoom()]
+    }
+
+    function transform(x, y) {
+      let [tx, ty] = translate(x, y)
+      return scale(tx, ty)
+    }
+    
+    function center(x, y) {
+      return [x - width() / 2, y - height() / 2]
+    }
+    
+    function normalize(w, h) {
+      return [w / width(), h / height()]
+    }
+    
+    function scale_norm(w, h) {
+      let [nw, nh] = normalize(w, h)
+      return scale(nw, nh)
+    }
+
+    function onWheel(e) {
+      let delta = e.deltaY / 1000.0;
+      if (grabPos) {
+        //console.log(e.which)
+      } else {
+        zoomLevel -= delta
+        sc.mState.iOrigin[2] = zoomLevel
+      }
+      
+      displayUniforms()
+    }
+
+    function onMouseDown(e) {
+      grabPos = [e.offsetX, e.offsetY]
+      
+      onMouseMove(e)
+    }
+    
+    function lerp(value1, value2, amount) {
+      amount = amount < 0 ? 0 : amount;
+      amount = amount > 1 ? 1 : amount;
+      return value1 + (value2 - value1) * amount;
+    }
+
+    function slerp(v1, v2, a) {
+      return lerp(v1, v2, 1. / (1. + Math.exp(-a)))
+    }
+    
+    function onMouseUp(e) {
+      if (!grabPos) return
+      let offset = scale_norm(e.offsetX - grabPos[0], e.offsetY - grabPos[1])
+      
+      if (e.which !== 3)
+        origin = { x: origin.x - offset[0], y: origin.y + offset[1] }
+
+      sc.mState.iOrigin = [origin.x, origin.y, zoomLevel]
+      grabPos = null
+    }
+
+    function onDoubleClick(e) {
+      let offset = scale_norm(e.offsetX - width() / 2, e.offsetY - height() / 2)
+      //offset[0] += origin.x - 0.5
+      //offset[1] += origin.y - 0.5
+      
+      //console.log(offset)
+      let from = { ...origin }
+      let to = { x: origin.x + offset[0], y: origin.y - offset[1] }
+      
+      let fps = 30.
+      for (let i = 1; i <= fps; i++) {
+        setTimeout(
+          () => {
+            origin = { x: lerp(from.x, to.x, i/fps), y: lerp(from.y, to.y, i/fps) }
+            zoomLevel += 0.022
+            sc.mState.iOrigin = [origin.x, origin.y, zoomLevel]
+          },
+          i * 140./fps)
+      }
+    }
+
+    function displayUniforms() {
+      elJC.innerText = `O: ${sc.mState.iOrigin[0].toFixed(3)}, ${sc.mState.iOrigin[1].toFixed(3)}`
+      elJC.innerText += `\r\nZoom: ${zoomLevel.toFixed(3)}`
+      
+      document.location.hash = `${sc.mState.iOrigin[0].toFixed(3)},${sc.mState.iOrigin[1].toFixed(3)},${zoomLevel.toFixed(3)}`
+    }
+
+    function onMouseMove(e) {
+      if (e.which === 0) {
+        displayUniforms()
+        return
+      }
+
+      if (e.which == 3) {
+      } else if (grabPos) {
+        let offset = scale_norm(e.offsetX - grabPos[0], e.offsetY - grabPos[1])
+        sc.mState.iOrigin = [origin.x  - offset[0], origin.y + offset[1], zoomLevel]
+      }
+      
+      displayUniforms()
+    }
+    
+    let lastTouches = null
+    let lastMultiTouches = null
+    function onFragShader(source) {
+      if (!sc.Init(source))
+      {
+          console.error( "Could not create shader!" );
+          return;
+      }
+      
+      sc.StartRendering(source)
+  
+      // defaults
+      let [x,y,z] = document.location.hash.substr(1).split(',')
+
+      sc.mState.iNumIters = 15
+      sc.mState.iThreshold = 2.0
+      zoomLevel = parseFloat(z) || 0.0
+      origin = { x: parseFloat(x) || 0.0, y: parseFloat(y) || 0.0 }
+      sc.mState.iOrigin = [origin.x, origin.y, zoomLevel]
+      
+      canvasShader.addEventListener('mousewheel', onWheel)
+      window.addEventListener('mousemove', onMouseMove)
+      canvasShader.addEventListener('mousedown', onMouseDown)
+      window.addEventListener('mouseup', onMouseUp)
+      canvasShader.addEventListener('dblclick', onDoubleClick)
+      canvasShader.oncontextmenu = function(e) { e.preventDefault(); e.stopPropagation(); }
+      
+      //// HACKS TO SUPPORT MOBILE SHIELD YOUR EYES ////
+      
+      canvasShader.addEventListener('touchmove', (e) => {        
+        if (e.touches.length > 1) {
+          
+          if (lastMultiTouches && lastMultiTouches.length > 1) {
+          let diffX0 = e.touches[0].clientX - lastMultiTouches[0].clientX
+            let diffY0 = e.touches[0].clientY - lastMultiTouches[0].clientY
+
+            let diffX1 = 0//e.touches[1].clientX - lastMultiTouches[1].clientX
+            let diffY1 = 0//e.touches[1].clientY - lastMultiTouches[1].clientY
+
+            let diffX = (Math.abs(diffX0) > Math.abs(diffX1) ? diffX0 : diffX1)
+            let diffY = (Math.abs(diffY0) > Math.abs(diffY1) ? diffY0 : diffY1)
+
+            //alert((diffX * diffY) / 1.0)
+            let prevGrab = grabPos
+            grabPos = false // dummy; wtf idk anymore
+            let deltaY = (/*diffX */ diffY) * -5
+            onWheel({deltaY})
+
+            grabPos = prevGrab
+          }
+
+          lastMultiTouches = e.touches
+        } else {
+          let touch = {which:1,offsetX:e.touches[0].clientX,offsetY:e.touches[0].clientY}
+          onMouseMove(touch)
+          
+          lastTouches = e.touches
+        }
+
+        e.preventDefault(); e.stopPropagation();
+      })
+      canvasShader.addEventListener('touchstart', (e) => {
+        if (!lastTouches) {
+          lastTouches = e.touches
+
+          let touch = {which:1,offsetX:e.touches[0].clientX,offsetY:e.touches[0].clientY}
+          onMouseDown(touch)
+        }
+        
+        e.preventDefault(); e.stopPropagation();
+      })
+      canvasShader.addEventListener('touchend', (e) => {
+        let touch = {which:1,offsetX:lastTouches[0].clientX,offsetY:lastTouches[0].clientY}
+        onMouseUp(touch)
+        e.preventDefault(); e.stopPropagation();
+        lastTouches = e.touches.length ? e.touches : null
+      })
+      
+      canvasShader.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); })
+    }
+
+    function pageInit()
+    {
+        piDisableTouch();
+      
+        let canvas = document.getElementById("canvasShader")
+        if (window.innerWidth > window.innerHeight) {
+          canvas.style['width'] = (window.innerHeight - 150) + 'px'
+        } else {
+          canvas.style['width'] = '100%'
+        }
+        
+        sc = new ShaderCanvas(canvas)
+        
+        //fetch('./menger.glsl')
+        fetch('https://cdn.glitch.global/2e1c9ac9-9b09-4c60-b233-0ab628ab920c/menger.glsl')
+          .then(resp => resp.text())
+          .then(source => onFragShader(source))
+    }
+    
+    function setIters(num) {
+      sc.mState.iNumIters = num
+    }
+
+    function setThreshold(threshold) {
+      sc.mState.iThreshold = Math.exp(threshold)
+    }
+    </script>
+</head>
+
+<body onload="pageInit()">
+    <canvas id="canvasShader" style="aspect-ratio : 1 / 1; margin: 0px; padding: 0px;"></canvas>
+    <br />
+    <input type="range" min="1" max="15" value="3" id="elNumIters" oninput="setIters(this.value)" />
+    <input type="range" min="0" max="70" value="2" id="elThreshold" oninput="setThreshold(this.value)" />
+    <div id="fpsCounter"></div>
+    <div id="elJC"></div>
+</body>
+
+</html>
