@@ -144,8 +144,7 @@
         let canvas = document.getElementById("canvasShader")
         sc = new ShaderCanvas(canvas)
         
-        //fetch('./frag.glsl')
-        fetch('https://cdn.glitch.global/2e1c9ac9-9b09-4c60-b233-0ab628ab920c/frag.glsl')
+        fetch('/julia.glsl')
           .then(resp => resp.text())
           .then(source => onFragShader(source))
     }

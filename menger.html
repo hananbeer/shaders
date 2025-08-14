@@ -245,8 +245,7 @@
         
         sc = new ShaderCanvas(canvas)
         
-        //fetch('./menger.glsl')
-        fetch('https://cdn.glitch.global/2e1c9ac9-9b09-4c60-b233-0ab628ab920c/menger.glsl')
+        fetch('/menger.glsl')
           .then(resp => resp.text())
           .then(source => onFragShader(source))
     }
